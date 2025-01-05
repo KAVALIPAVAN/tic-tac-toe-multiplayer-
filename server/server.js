@@ -1,78 +1,97 @@
-import { createServer } from "http";
+
 import { Server } from "socket.io";
+import { createServer } from "http";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
-  cors:"http://localhost:5173/",
+  cors: "http://localhost:5174/",
 });
 
-const allUsers={};
-const allRooms=[];
+const allUsers = {}; // Track all users by socket ID
+const allRooms = {}; // Track rooms with players
+
 io.on("connection", (socket) => {
+  allUsers[socket.id] = {
+    socket: socket,
+    online: true,
+  };
 
-    allUsers[socket.id]={
-        socket:socket,
-        online:true
-    }
+  socket.on("request_to_play", (data) => {
+    const currentUser = allUsers[socket.id];
+    currentUser.playerName = data.playerName;
 
-socket.on("request_to_play",(data)=>{
- const currentUser=allUsers[socket.id];
- currentUser.playerName=data.playerName;
- 
- let opponentPlayer;
- for (const key in allUsers) {
-    const user=allUsers[key];
-    if (user.online&&!user.playing&&socket.id!==key) {
-        opponentPlayer=user;
+    let roomAssigned = false;
+
+    // Look for a room with only one player
+    for (const room in allRooms) {
+      const players = allRooms[room];
+      if (players.length === 1) {
+        players.push(currentUser);
+        roomAssigned = true;
+
+        const opponentPlayer = players[0];
+
+        currentUser.socket.join(room);
+        opponentPlayer.socket.join(room);
+
+        currentUser.socket.emit("OpponentFound", {
+          opponentName: opponentPlayer.playerName,
+          playingAs: "cross",
+        });
+
+        opponentPlayer.socket.emit("OpponentFound", {
+          opponentName: currentUser.playerName,
+          playingAs: "circle",
+        });
+
+        setupGameListeners(room, players);
         break;
-    }
- }
- if (opponentPlayer) {
-    allRooms.push({
-        player1:opponentPlayer,
-        player2:currentUser,
-    })
-    opponentPlayer.socket.emit("OpponentFound",{
-        opponentName:currentUser.playerName,
-        playingAs:'cross',
-    })
-    currentUser.socket.emit("OpponentFound",{
-        opponentName:opponentPlayer.playerName,
-        playingAs:'circle'
-    });
-    currentUser.socket.on("playerMoveFromClient",(data)=>{
-        opponentPlayer.socket.emit("playerMoveFromServer",{
-            ...data,
-        })
-    })
-    opponentPlayer.socket.on("playerMoveFromClient",(data)=>{
-        currentUser.socket.emit("playerMoveFromServer",{
-           ...data,
-        })
-    })
- }else{
-    currentUser.socket.emit("OpponentNotFound");
- }
-
-})
-
- socket.on("disconnect",function(){
-      const currentUser=allUsers[socket.id];
-      currentUser.online=false;
-      currentUser.playing=false;
-      for (let index = 0; index < allRooms.length; index++) {
-        const {player1,player2} = allRooms[index];
-        if (player1.socket.id===socket.id) {
-         player2.socket.emit("opponentLeftMatch")
-         break;
-        }
-        if (player2.socket.id===socket.id) {
-           player1.socket.emit("opponentLeftMatch")
-           break
-        }
       }
-    })
+    }
 
+    // If no available room, create a new one
+    if (!roomAssigned) {
+      const newRoom = `room_${Object.keys(allRooms).length + 1}`;
+      allRooms[newRoom] = [currentUser];
+      currentUser.socket.join(newRoom);
+      currentUser.socket.emit("OpponentNotFound");
+    }
+  });
+
+  socket.on("disconnect", function () {
+    const currentUser = allUsers[socket.id];
+    currentUser.online = false;
+
+    for (const room in allRooms) {
+      const players = allRooms[room];
+      const index = players.findIndex((player) => player.socket.id === socket.id);
+
+      if (index !== -1) {
+        const opponent = players.find((_, i) => i !== index);
+        if (opponent) {
+          opponent.socket.emit("opponentLeftMatch");
+        }
+        delete allRooms[room];
+        break;
+      }
+    }
+  });
 });
+
+function setupGameListeners(room, players) {
+  const [player1, player2] = players;
+
+  player1.socket.on("playerMoveFromClient", (data) => {
+    io.to(room).emit("playerMoveFromServer", {
+      ...data,
+    });
+  });
+
+  player2.socket.on("playerMoveFromClient", (data) => {
+    io.to(room).emit("playerMoveFromServer", {
+      ...data,
+    });
+  });
+}
 
 httpServer.listen(3000);
