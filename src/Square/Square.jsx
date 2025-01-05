@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import "./square.css";
+// <<<<<<< HEAD
 
+// =======
+// >>>>>>> ba2e61636bf98b267ea8f7a3670771c0c6ca19d4
 
 const circleSvg = (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
