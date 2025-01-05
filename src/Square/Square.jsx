@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "./Square.css";
+import "./square.css";
 
 const circleSvg = (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
