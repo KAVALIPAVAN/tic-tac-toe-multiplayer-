@@ -4,7 +4,7 @@ import { createServer } from "http";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
-  cors: "http://localhost:5174/",
+  cors: "https://tic-tac-toe-multiplayer-gold.vercel.app/localhost:5174/",
 });
 
 const allUsers = {}; // Track all users by socket ID
