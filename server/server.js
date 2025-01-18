@@ -4,13 +4,15 @@ import { createServer } from "http";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
-  cors: "https://tic-tac-toe-multiplayer-gold.vercel.app/localhost:5174/",
+  // cors: "https://tic-tac-toe-multiplayer-gold.vercel.app/localhost:5174/",
+  cors: "http://localhost:5173/",
 });
 
 const allUsers = {}; // Track all users by socket ID
 const allRooms = {}; // Track rooms with players
 
 io.on("connection", (socket) => {
+  console.log("working");
   allUsers[socket.id] = {
     socket: socket,
     online: true,
