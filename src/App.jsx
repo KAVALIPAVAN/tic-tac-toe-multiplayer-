@@ -128,10 +128,7 @@ const App = () => {
     const username = result.value;
     setPlayerName(username);
 
-    // const newSocket = io("https://tic-tac-toeserver.vercel.app/localhost:3000", {
-    //   autoConnect: true,
-    // });
-    const newSocket = io("http://localhost:3000", {
+    const newSocket = io("https://tic-tac-toeserver.vercel.app/localhost:3000", {
       autoConnect: true,
     });
 
