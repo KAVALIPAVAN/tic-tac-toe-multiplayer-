@@ -128,8 +128,11 @@ const App = () => {
     const username = result.value;
     setPlayerName(username);
 
-    const newSocket = io("https://tic-tac-toe-server2.vercel.app/", {
+    const newSocket = io("wss://summer-salt-zone-server.glitch.me/", {
       autoConnect: true,
+      headers:{
+      "User-agent":"Google Chrome"
+      }
     });
 
     newSocket?.emit("request_to_play", {
