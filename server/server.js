@@ -2,6 +2,8 @@
 import { Server } from "socket.io";
 import { createServer } from "http";
 
+const PORT=3000;
+
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: "https://tic-tac-toe-multiplayer-gold.vercel.app/",
@@ -95,4 +97,8 @@ function setupGameListeners(room, players) {
   });
 }
 
-httpServer.listen(3000);
+httpServer.listen(PORT, () => {
+  console.log(`Server is running and listening on port ${PORT}`);
+});
+
+
