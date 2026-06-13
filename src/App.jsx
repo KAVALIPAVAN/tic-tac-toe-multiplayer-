@@ -4,6 +4,8 @@ import Square from "./Square/Square";
 import { io } from "socket.io-client";
 import Swal from "sweetalert2";
 
+const SOCKET_SERVER_URL = "https://tic-tac-toe-multiplayer-qvqi.onrender.com";
+
 const renderFrom = [
   [1, 2, 3],
   [4, 5, 6],
@@ -89,34 +91,52 @@ const App = () => {
     return result;
   };
 
-  socket?.on("opponentLeftMatch", () => {
-    setFinishetState("opponentLeftMatch");
-  });
+  useEffect(() => {
+    if (!socket) return;
 
-  socket?.on("playerMoveFromServer", (data) => {
-    const id = data.state.id;
-    setGameState((prevState) => {
-      let newState = [...prevState];
-      const rowIndex = Math.floor(id / 3);
-      const colIndex = id % 3;
-      newState[rowIndex][colIndex] = data.state.sign;
-      return newState;
-    });
-    setCurrentPlayer(data.state.sign === "circle" ? "cross" : "circle");
-  });
+    const handleOpponentLeftMatch = () => {
+      setFinishetState("opponentLeftMatch");
+    };
 
-  socket?.on("connect", function () {
-    setPlayOnline(true);
-  });
+    const handlePlayerMoveFromServer = (data) => {
+      const id = data.state.id;
+      setGameState((prevState) => {
+        const newState = [...prevState];
+        const rowIndex = Math.floor(id / 3);
+        const colIndex = id % 3;
+        newState[rowIndex][colIndex] = data.state.sign;
+        return newState;
+      });
+      setCurrentPlayer(data.state.sign === "circle" ? "cross" : "circle");
+    };
 
-  socket?.on("OpponentNotFound", function () {
-    setOpponentName(false);
-  });
+    const handleConnect = () => {
+      setPlayOnline(true);
+    };
 
-  socket?.on("OpponentFound", function (data) {
-    setPlayingAs(data.playingAs);
-    setOpponentName(data.opponentName);
-  });
+    const handleOpponentNotFound = () => {
+      setOpponentName(false);
+    };
+
+    const handleOpponentFound = (data) => {
+      setPlayingAs(data.playingAs);
+      setOpponentName(data.opponentName);
+    };
+
+    socket.on("opponentLeftMatch", handleOpponentLeftMatch);
+    socket.on("playerMoveFromServer", handlePlayerMoveFromServer);
+    socket.on("connect", handleConnect);
+    socket.on("OpponentNotFound", handleOpponentNotFound);
+    socket.on("OpponentFound", handleOpponentFound);
+
+    return () => {
+      socket.off("opponentLeftMatch", handleOpponentLeftMatch);
+      socket.off("playerMoveFromServer", handlePlayerMoveFromServer);
+      socket.off("connect", handleConnect);
+      socket.off("OpponentNotFound", handleOpponentNotFound);
+      socket.off("OpponentFound", handleOpponentFound);
+    };
+  }, [socket]);
 
   async function playOnlineClick() {
     const result = await takePlayerName();
@@ -127,19 +147,17 @@ const App = () => {
 
     const username = result.value;
     setPlayerName(username);
+    setPlayOnline(true);
 
-    const newSocket = io("https://tic-tac-toe-multiplayer-qvqi.onrender.com", {
+    const newSocket = io(SOCKET_SERVER_URL, {
       autoConnect: true,
-      headers:{
-      "User-agent":"Google Chrome"
-      }
-    });
-
-    newSocket?.emit("request_to_play", {
-      playerName: username,
     });
 
     setSocket(newSocket);
+
+    newSocket.emit("request_to_play", {
+      playerName: username,
+    });
   }
 
   if (!playOnline) {
