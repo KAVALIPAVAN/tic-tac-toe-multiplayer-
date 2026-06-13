@@ -128,7 +128,7 @@ const App = () => {
     const username = result.value;
     setPlayerName(username);
 
-    const newSocket = io("wss://summer-salt-zone-server.glitch.me/", {
+    const newSocket = io("https://tic-tac-toe-multiplayer-qvqi.onrender.com", {
       autoConnect: true,
       headers:{
       "User-agent":"Google Chrome"
