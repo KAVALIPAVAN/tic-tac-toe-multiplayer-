@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 import Swal from "sweetalert2";
 
 const SOCKET_SERVER_URL = "https://tic-tac-toe-multiplayer-qvqi.onrender.com";
-
+ //const SOCKET_SERVER_URL = "http://localhost:3000";
 const renderFrom = [
   [1, 2, 3],
   [4, 5, 6],

@@ -1,246 +1,127 @@
-import React, { useState, useEffect } from "react";
-import "./App.css";
-import Square from "./Square/Square";
-import { io } from "socket.io-client";
-import Swal from "sweetalert2";
+import { Server } from "socket.io";
+import { createServer } from "http";
 
-const SOCKET_SERVER_URL = "https://tic-tac-toe-multiplayer-qvqi.onrender.com";
+const PORT = process.env.PORT || 3000;
 
-const renderFrom = [
-  [1, 2, 3],
-  [4, 5, 6],
-  [7, 8, 9],
-];
+// HTTP server for Render
+const httpServer = createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Tic Tac Toe Server Running");
+});
 
-const App = () => {
-  const [gameState, setGameState] = useState(renderFrom);
-  const [currentPlayer, setCurrentPlayer] = useState("circle");
-  const [finishedState, setFinishetState] = useState(false);
-  const [finishedArrayState, setFinishedArrayState] = useState([]);
-  const [playOnline, setPlayOnline] = useState(false);
-  const [socket, setSocket] = useState(null);
-  const [playerName, setPlayerName] = useState("");
-  const [opponentName, setOpponentName] = useState(null);
-  const [playingAs, setPlayingAs] = useState(null);
+const io = new Server(httpServer, {
+  cors: {
+    origin: [
+      "http://localhost:5173",
+      "https://tic-tac-toe-multiplayer-gold.vercel.app",
+    ],
+    methods: ["GET", "POST"],
+  },
+});
 
-  const checkWinner = () => {
-    // row dynamic
-    for (let row = 0; row < gameState.length; row++) {
-      if (
-        gameState[row][0] === gameState[row][1] &&
-        gameState[row][1] === gameState[row][2]
-      ) {
-        setFinishedArrayState([row * 3 + 0, row * 3 + 1, row * 3 + 2]);
-        return gameState[row][0];
-      }
-    }
+const allUsers = {};
+const allRooms = {};
 
-    // column dynamic
-    for (let col = 0; col < gameState.length; col++) {
-      if (
-        gameState[0][col] === gameState[1][col] &&
-        gameState[1][col] === gameState[2][col]
-      ) {
-        setFinishedArrayState([0 * 3 + col, 1 * 3 + col, 2 * 3 + col]);
-        return gameState[0][col];
-      }
-    }
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-    if (
-      gameState[0][0] === gameState[1][1] &&
-      gameState[1][1] === gameState[2][2]
-    ) {
-      return gameState[0][0];
-    }
-
-    if (
-      gameState[0][2] === gameState[1][1] &&
-      gameState[1][1] === gameState[2][0]
-    ) {
-      return gameState[0][2];
-    }
-
-    const isDrawMatch = gameState.flat().every((e) => {
-      if (e === "circle" || e === "cross") return true;
-    });
-
-    if (isDrawMatch) return "draw";
-
-    return null;
+  allUsers[socket.id] = {
+    socket,
+    online: true,
   };
 
-  useEffect(() => {
-    const winner = checkWinner();
-    if (winner) {
-      setFinishetState(winner);
-    }
-  }, [gameState]);
+  socket.on("request_to_play", (data) => {
+    const currentUser = allUsers[socket.id];
+    currentUser.playerName = data.playerName;
 
-  const takePlayerName = async () => {
-    const result = await Swal.fire({
-      title: "Enter your name",
-      input: "text",
-      showCancelButton: true,
-      inputValidator: (value) => {
-        if (!value) {
-          return "You need to write something!";
+    let roomAssigned = false;
+
+    // Find a room with one player
+    for (const room in allRooms) {
+      const players = allRooms[room];
+
+      if (players.length === 1) {
+        players.push(currentUser);
+        roomAssigned = true;
+
+        const opponentPlayer = players[0];
+
+        currentUser.socket.join(room);
+        opponentPlayer.socket.join(room);
+
+        currentUser.socket.emit("OpponentFound", {
+          opponentName: opponentPlayer.playerName,
+          playingAs: "cross",
+        });
+
+        opponentPlayer.socket.emit("OpponentFound", {
+          opponentName: currentUser.playerName,
+          playingAs: "circle",
+        });
+
+        setupGameListeners(room, players);
+        break;
+      }
+    }
+
+    // Create a room if none available
+    if (!roomAssigned) {
+      const roomName = `room_${Date.now()}`;
+
+      allRooms[roomName] = [currentUser];
+
+      currentUser.socket.join(roomName);
+
+      currentUser.socket.emit("OpponentNotFound");
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+
+    const currentUser = allUsers[socket.id];
+
+    if (currentUser) {
+      currentUser.online = false;
+    }
+
+    for (const room in allRooms) {
+      const players = allRooms[room];
+
+      const index = players.findIndex(
+        (player) => player.socket.id === socket.id
+      );
+
+      if (index !== -1) {
+        const opponent = players.find(
+          (_, i) => i !== index
+        );
+
+        if (opponent) {
+          opponent.socket.emit("opponentLeftMatch");
         }
-      },
-    });
 
-    return result;
-  };
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleOpponentLeftMatch = () => {
-      setFinishetState("opponentLeftMatch");
-    };
-
-    const handlePlayerMoveFromServer = (data) => {
-      const id = data.state.id;
-      setGameState((prevState) => {
-        const newState = [...prevState];
-        const rowIndex = Math.floor(id / 3);
-        const colIndex = id % 3;
-        newState[rowIndex][colIndex] = data.state.sign;
-        return newState;
-      });
-      setCurrentPlayer(data.state.sign === "circle" ? "cross" : "circle");
-    };
-
-    const handleConnect = () => {
-      setPlayOnline(true);
-    };
-
-    const handleOpponentNotFound = () => {
-      setOpponentName(false);
-    };
-
-    const handleOpponentFound = (data) => {
-      setPlayingAs(data.playingAs);
-      setOpponentName(data.opponentName);
-    };
-
-    socket.on("opponentLeftMatch", handleOpponentLeftMatch);
-    socket.on("playerMoveFromServer", handlePlayerMoveFromServer);
-    socket.on("connect", handleConnect);
-    socket.on("OpponentNotFound", handleOpponentNotFound);
-    socket.on("OpponentFound", handleOpponentFound);
-
-    return () => {
-      socket.off("opponentLeftMatch", handleOpponentLeftMatch);
-      socket.off("playerMoveFromServer", handlePlayerMoveFromServer);
-      socket.off("connect", handleConnect);
-      socket.off("OpponentNotFound", handleOpponentNotFound);
-      socket.off("OpponentFound", handleOpponentFound);
-    };
-  }, [socket]);
-
-  async function playOnlineClick() {
-    const result = await takePlayerName();
-
-    if (!result.isConfirmed) {
-      return;
+        delete allRooms[room];
+        break;
+      }
     }
 
-    const username = result.value;
-    setPlayerName(username);
-    setPlayOnline(true);
+    delete allUsers[socket.id];
+  });
+});
 
-    const newSocket = io(SOCKET_SERVER_URL, {
-      autoConnect: true,
-    });
+function setupGameListeners(room, players) {
+  const [player1, player2] = players;
 
-    setSocket(newSocket);
+  player1.socket.on("playerMoveFromClient", (data) => {
+    io.to(room).emit("playerMoveFromServer", data);
+  });
 
-    newSocket.emit("request_to_play", {
-      playerName: username,
-    });
-  }
+  player2.socket.on("playerMoveFromClient", (data) => {
+    io.to(room).emit("playerMoveFromServer", data);
+  });
+}
 
-  if (!playOnline) {
-    return (
-      <div className="main-div">
-        <button onClick={playOnlineClick} className="playOnline">
-          Play Online
-        </button>
-      </div>
-    );
-  }
-
-  if (playOnline && !opponentName) {
-    return (
-      <div className="waiting">
-        <p>Waiting for opponent</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="main-div">
-      <div className="move-detection">
-        <div
-          className={`left ${
-            currentPlayer === playingAs ? "current-move-" + currentPlayer : ""
-          }`}
-        >
-          {playerName}
-        </div>
-        <div
-          className={`right ${
-            currentPlayer !== playingAs ? "current-move-" + currentPlayer : ""
-          }`}
-        >
-          {opponentName}
-        </div>
-      </div>
-      <div>
-        <h1 className="game-heading water-background">Tic Tac Toe</h1>
-        <div className="square-wrapper">
-          {gameState.map((arr, rowIndex) =>
-            arr.map((e, colIndex) => {
-              return (
-                <Square
-                  socket={socket}
-                  playingAs={playingAs}
-                  gameState={gameState}
-                  finishedArrayState={finishedArrayState}
-                  finishedState={finishedState}
-                  currentPlayer={currentPlayer}
-                  setCurrentPlayer={setCurrentPlayer}
-                  setGameState={setGameState}
-                  id={rowIndex * 3 + colIndex}
-                  key={rowIndex * 3 + colIndex}
-                  currentElement={e}
-                />
-              );
-            })
-          )}
-        </div>
-        {finishedState &&
-          finishedState !== "opponentLeftMatch" &&
-          finishedState !== "draw" && (
-            <h3 className="finished-state">
-              {finishedState === playingAs ? "You " : finishedState} won the
-              game
-            </h3>
-          )}
-        {finishedState &&
-          finishedState !== "opponentLeftMatch" &&
-          finishedState === "draw" && (
-            <h3 className="finished-state">It's a Draw</h3>
-          )}
-      </div>
-      {!finishedState && opponentName && (
-        <h2>You are playing against {opponentName}</h2>
-      )}
-      {finishedState && finishedState === "opponentLeftMatch" && (
-        <h2>You won the match, Opponent has left</h2>
-      )}
-    </div>
-  );
-};
-
-export default App;
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running and listening on port ${PORT}`);
+});
