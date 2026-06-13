@@ -2,12 +2,20 @@
 import { Server } from "socket.io";
 import { createServer } from "http";
 
-const PORT=3000;
+const PORT = process.env.PORT || 3000;
 
-const httpServer = createServer();
-const io = new Server(httpServer, {
-  cors: "https://tic-tac-toe-multiplayer-gold.vercel.app/",
+const httpServer = createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Tic Tac Toe Server Running");
 });
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: "https://tic-tac-toe-multiplayer-gold.vercel.app",
+    methods: ["GET", "POST"],
+  },
+});
+
 
 const allUsers = {}; // Track all users by socket ID
 const allRooms = {}; // Track rooms with players
@@ -97,7 +105,7 @@ function setupGameListeners(room, players) {
   });
 }
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running and listening on port ${PORT}`);
 });
 
